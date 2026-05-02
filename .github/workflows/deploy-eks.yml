@@ -1,0 +1,53 @@
+name: Deploy to EKS
+
+# When to run this workflow
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "CD to cluster/**"
+      - ".github/workflows/deploy-eks.yml"
+  workflow_dispatch:
+
+# Permissions for OIDC and repo read
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # Single job that authenticates and applies manifests
+  deploy:
+    runs-on: ubuntu-latest
+    # Shared settings for this job (from GitHub repo variables)
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      K8S_MANIFEST_PATH: "CD to cluster/k8s"
+    steps:
+      # Get the repository contents
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Assume the AWS role via OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Install kubectl for cluster access
+      - name: Install kubectl
+        uses: aws-actions/eks-setup-kubectl@v1
+
+      # Write kubeconfig for the target cluster
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      # Apply Kubernetes manifests
+      - name: Deploy manifests
+        run: kubectl apply -f "$K8S_MANIFEST_PATH"
+
+      # Wait for deployment rollout
+      - name: Check rollout
+        run: kubectl -n demo rollout status deployment/demo-web

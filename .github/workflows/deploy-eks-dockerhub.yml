@@ -1,0 +1,115 @@
+name: Build and deploy to EKS (DockerHub)
+
+# When to run this workflow
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "CD to cluster - dockerhub/**"
+      - "java-maven-app/**"
+      - ".github/workflows/deploy-eks-dockerhub.yml"
+  workflow_dispatch:
+
+# Permissions for OIDC and repo write (version bump commit)
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  # Build the app, push image to DockerHub, deploy to EKS
+  build-deploy:
+    runs-on: ubuntu-latest
+    # Shared settings for this job (from GitHub repo variables)
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+      APP_PATH: java-maven-app
+      K8S_PATH: "CD to cluster - dockerhub/k8s"
+    steps:
+      # Get the repository contents
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install Java for Maven build
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Assume the AWS role via OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Install kubectl for cluster access
+      - name: Install kubectl
+        uses: aws-actions/eks-setup-kubectl@v1
+
+      # Compute next app version
+      - name: Resolve version
+        id: version
+        run: |
+          VERSION=$(mvn -q -DforceStdout -Dexpression=project.version -f "$APP_PATH/pom.xml" help:evaluate)
+          BASE=${VERSION%-SNAPSHOT}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+          PATCH=${PATCH:-0}
+          NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH+1))-SNAPSHOT"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      # Persist the new version in pom.xml
+      - name: Bump version
+        run: mvn -q -f "$APP_PATH/pom.xml" versions:set -DnewVersion="${{ steps.version.outputs.new_version }}" -DgenerateBackupPoms=false
+
+      # Build the Spring Boot jar
+      - name: Build app
+        run: mvn -q -f "$APP_PATH/pom.xml" -DskipTests package
+
+      # Authenticate to DockerHub
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and push the container image
+      - name: Build and push image
+        env:
+          IMAGE_TAG: ${{ steps.version.outputs.new_version }}
+        run: |
+          IMAGE="$DOCKERHUB_IMAGE:$IMAGE_TAG"
+          docker build -f "CD to cluster - dockerhub/Dockerfile" -t "$IMAGE" "$APP_PATH"
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      # Write kubeconfig for the target cluster
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      # Apply Kubernetes manifests with the new image
+      - name: Deploy manifests
+        run: |
+          kubectl apply -f "$K8S_PATH/namespace.yaml"
+          kubectl apply -f "$K8S_PATH/service.yaml"
+          sed "s|IMAGE_PLACEHOLDER|$IMAGE|g" "$K8S_PATH/deployment.yaml" | kubectl apply -f -
+
+      # Wait for deployment rollout
+      - name: Check rollout
+        run: kubectl -n demo rollout status deployment/java-maven-app
+
+      # Commit the version bump back to the repo
+      - name: Commit version bump
+        run: |
+          if git diff --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+          git config user.name "Carmen Ciubancan"
+          git config user.email "carmenciubancan7@gmail.com"
+          git add "$APP_PATH/pom.xml"
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }}"
+          git push
