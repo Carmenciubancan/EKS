@@ -1,4 +1,4 @@
-# GitHub Actions configuration
+## GitHub Actions configuration
 
 This folder is required by GitHub Actions. Any workflow placed in .github/workflows is discovered and run by GitHub.
 
