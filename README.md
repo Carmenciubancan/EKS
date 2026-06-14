@@ -1,8 +1,7 @@
 # EKS CI/CD demo repo
 
-This repo contains one CI validation pipeline and three GitHub Actions deployment pipelines for the same EKS cluster:
+This repo contains three GitHub Actions deployment pipelines for the same EKS cluster:
 
-- CI validation in .github/workflows/ci.yml
 - Simple CD (apply manifests only) in CD to cluster
 - Full CI/CD with DockerHub in CD to cluster - dockerhub
 - Full CI/CD with AWS ECR in CD to cluster - ecr
@@ -11,8 +10,7 @@ This repo contains one CI validation pipeline and three GitHub Actions deploymen
 
 1) Ensure the EKS cluster exists and your IAM role has Kubernetes access.
 2) Configure repo variables and secrets in GitHub.
-3) Use CI validation on every push to verify the build, Docker image, and Kubernetes manifest syntax.
-4) Run the deployment workflow manually when AWS EKS/ECR access is available.
+3) Run the deployment workflow manually when AWS EKS/ECR access is available.
 
 ## Pipelines
 
