@@ -2,13 +2,6 @@ name: Build and deploy to EKS (ECR)
 
 # When to run this workflow
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "CD to cluster - ecr/**"
-      - "java-maven-app/**"
-      - ".github/workflows/deploy-eks-ecr.yml"
   workflow_dispatch:
 
 # Permissions for OIDC and repo write (version bump commit)
@@ -48,7 +41,7 @@ jobs:
 
       # Install kubectl for cluster access
       - name: Install kubectl
-        uses: aws-actions/eks-setup-kubectl@v1
+        uses: azure/setup-kubectl@v4
 
       # Compute next app version
       - name: Resolve version
@@ -110,5 +103,5 @@ jobs:
           git config user.name "Carmen Ciubancan"
           git config user.email "carmenciubancan7@gmail.com"
           git add "$APP_PATH/pom.xml"
-          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }}"
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
           git push

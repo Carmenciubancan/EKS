@@ -1,7 +1,8 @@
 # EKS CI/CD demo repo
 
-This repo contains three GitHub Actions pipelines that deploy to the same EKS cluster:
+This repo contains one CI validation pipeline and three GitHub Actions deployment pipelines for the same EKS cluster:
 
+- CI validation in .github/workflows/ci.yml
 - Simple CD (apply manifests only) in CD to cluster
 - Full CI/CD with DockerHub in CD to cluster - dockerhub
 - Full CI/CD with AWS ECR in CD to cluster - ecr
@@ -10,7 +11,8 @@ This repo contains three GitHub Actions pipelines that deploy to the same EKS cl
 
 1) Ensure the EKS cluster exists and your IAM role has Kubernetes access.
 2) Configure repo variables and secrets in GitHub.
-3) Trigger a workflow by pushing changes in the relevant folder or running it manually.
+3) Use CI validation on every push to verify the build, Docker image, and Kubernetes manifest syntax.
+4) Run the deployment workflow manually when AWS EKS/ECR access is available.
 
 ## Pipelines
 
@@ -18,19 +20,19 @@ This repo contains three GitHub Actions pipelines that deploy to the same EKS cl
 
 - Workflow: .github/workflows/deploy-eks.yml
 - Deploys manifests from CD to cluster/k8s
-- Trigger: push changes under CD to cluster/ or manual run
+- Trigger: manual run from GitHub Actions
 
 ### 2) CI/CD to EKS with DockerHub
 
 - Workflow: .github/workflows/deploy-eks-dockerhub.yml
 - Builds the Java app, pushes Docker image to DockerHub, deploys to EKS
-- Trigger: push changes under CD to cluster - dockerhub/ or java-maven-app/ or manual run
+- Trigger: manual run from GitHub Actions
 
 ### 3) CI/CD to EKS with AWS ECR
 
 - Workflow: .github/workflows/deploy-eks-ecr.yml
 - Builds the Java app, pushes Docker image to ECR, deploys to EKS
-- Trigger: push changes under CD to cluster - ecr/ or java-maven-app/ or manual run
+- Trigger: manual run from GitHub Actions
 
 ## Required GitHub variables (for all pipelines)
 
